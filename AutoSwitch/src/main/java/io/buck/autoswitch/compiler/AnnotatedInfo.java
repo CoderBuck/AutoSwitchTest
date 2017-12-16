@@ -1,7 +1,5 @@
 package io.buck.autoswitch.compiler;
 
-import com.squareup.javapoet.TypeName;
-
 import java.util.ArrayList;
 import java.util.List;
 

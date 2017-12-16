@@ -12,7 +12,7 @@ public class TestB implements BaseHandler {
     public void handle(String msgId, byte[] bytes) {
     }
 
-    @Message("1")
+    @Message("7")
     public static void a(byte[] bytes) {
         System.out.println("1");
     }

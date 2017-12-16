@@ -1,24 +1,15 @@
 package io.buck.autoswitch.compiler;
 
-import com.google.auto.service.AutoService;
-import com.squareup.javapoet.ClassName;
-import com.squareup.javapoet.JavaFile;
-import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.TypeSpec;
-
 import java.io.IOException;
 import java.io.Writer;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
 import javax.annotation.processing.ProcessingEnvironment;
-import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
@@ -36,8 +27,8 @@ import io.buck.autoswitch.annotation.Message;
  * Created by buck on 2017/12/7
  */
 
-@AutoService(Processor.class)
-public class AutoSwitchProcessor extends AbstractProcessor {
+//@AutoService(Processor.class)
+public class AutoHandlerProcessor extends AbstractProcessor {
 
     private Messager messager;
     private Elements elementUtils;
