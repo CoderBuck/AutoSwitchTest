@@ -3,39 +3,43 @@ package io.buck.autoswitchtest;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 
-import io.buck.autoswitch.annotation.AutoCase;
-import io.buck.autoswitch.compiler.MyAutoSwitch;
+import java.util.Arrays;
+import java.util.List;
+
+import io.buck.autoswitch.annotation.Message;
 
 public class MainActivity extends AppCompatActivity {
+
+    List<BaseHandler> mHandlers = Arrays.asList(new TestA(), new TestB());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        byte[] bytes = "A".getBytes();
         for (int i = 0; i < 10; i++) {
-            new MyAutoSwitch().handler(this,i+"");
         }
 
     }
 
-    @AutoCase("1")
-    public void a() {
-        System.out.println("1");
-    }
+//    @Message("1")
+//    public void a(byte[] bytes) {
+//        System.out.println("1");
+//    }
+//
+//    @Message("2")
+//    public void b(byte[] bytes) {
+//        System.out.println("2");
+//    }
+//
+//    @Message("3")
+//    public void c(byte[] bytes) {
+//        System.out.println("3");
+//    }
+//
+//    @Message("4")
+//    public void d(byte[] bytes) {
+//        System.out.println("4");
+//    }
 
-    @AutoCase("2")
-    public void b() {
-        System.out.println("2");
-    }
-
-    @AutoCase("3")
-    public void c() {
-        System.out.println("3");
-    }
-
-    @AutoCase("4")
-    public void d() {
-        System.out.println("4");
-    }
 }

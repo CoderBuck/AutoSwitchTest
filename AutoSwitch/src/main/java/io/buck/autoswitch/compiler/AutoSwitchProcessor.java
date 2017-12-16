@@ -4,14 +4,14 @@ import com.google.auto.service.AutoService;
 import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
-import com.squareup.javapoet.ParameterSpec;
-import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
-import java.lang.annotation.Annotation;
+import java.io.Writer;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,8 +28,9 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
+import javax.tools.JavaFileObject;
 
-import io.buck.autoswitch.annotation.AutoCase;
+import io.buck.autoswitch.annotation.Message;
 
 /**
  * Created by buck on 2017/12/7
@@ -40,13 +41,12 @@ public class AutoSwitchProcessor extends AbstractProcessor {
 
     private Messager messager;
     private Elements elementUtils;
-
-    private Map<String, AnnotatedInfo> classMap = new HashMap<>();
+    private Set<String> messages = new HashSet<>();
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
         Set<String> set = new HashSet<>();
-        set.add(AutoCase.class.getCanonicalName());
+        set.add(Message.class.getCanonicalName());
         return set;
     }
 
@@ -58,35 +58,40 @@ public class AutoSwitchProcessor extends AbstractProcessor {
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
-
         messager = processingEnv.getMessager();
         elementUtils = processingEnv.getElementUtils();
-
     }
+
+    private Map<String, AnnotatedInfo> classMap = new HashMap<>();
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 
         classMap.clear();
 
-        Set<? extends Element> autoCaseelEments = roundEnv.getElementsAnnotatedWith(AutoCase.class);
+        Set<? extends Element> autoCaseelEments = roundEnv.getElementsAnnotatedWith(Message.class);
         for (Element autoCaseElement : autoCaseelEments) {
-            checkAnnotationValid(autoCaseElement, AutoCase.class);
+            checkAnnotationValid(autoCaseElement, Message.class);
 
             ExecutableElement methodElement = (ExecutableElement) autoCaseElement;
-            //方法名
             String methodName = methodElement.getSimpleName().toString();
+            if (!methodElement.getModifiers().contains(Modifier.STATIC)) {
+                error(methodElement,"%s method must be static", methodName);
+                return false;
+            }
             TypeElement classElement = (TypeElement) methodElement.getEnclosingElement();
-            //类名
             String className = classElement.getSimpleName().toString();
-            //全路径类名
             String classFullName = classElement.getQualifiedName().toString();
-            //包名
             String packageName = elementUtils.getPackageOf(classElement).toString();
-            //消息id
-            AutoCase autoCase = methodElement.getAnnotation(AutoCase.class);
-            String msgId = autoCase.value();
+            Message autoCase = methodElement.getAnnotation(Message.class);
 
+            String msgId = autoCase.value();
+            if (messages.contains(msgId)) {
+                error(autoCaseElement, "%s message 已存在!", msgId);
+                return false;
+            } else {
+                messages.add(msgId);
+            }
             AnnotatedInfo info = classMap.get(classFullName);
             if (info == null) {
                 info = new AnnotatedInfo(packageName, classFullName, className);
@@ -96,45 +101,93 @@ public class AutoSwitchProcessor extends AbstractProcessor {
             info.addHandler(new Handler(msgId, methodName));
         }
 
-        for (String key : classMap.keySet()) {
-            AnnotatedInfo info = classMap.get(key);
 
-            ClassName className = ClassName.get(info.packageName, info.className);
+//        TypeSpec.Builder classBuilder = TypeSpec.classBuilder("AutoHandler");
+//        classBuilder.addModifiers(Modifier.PUBLIC);
+//
+//        StringBuilder sb = new StringBuilder();
+//        sb.append("  switch(msgId){\n");
+//
+//        for (String key : classMap.keySet()) {
+//            AnnotatedInfo info = classMap.get(key);
+//
+//            ClassName className = ClassName.get(info.packageName, info.className);
+//
+//
+//            for (Handler handler : info.handlers) {
+//                sb.append("    case \"" + handler.msgId + "\":\n");
+//                sb.append("      " + info.className + "." + handler.methodName + "(bytes);" + "\n");
+//                sb.append("      " + "break;" + "\n");
+//            }
+//
+//
+//        }
+//        sb.append("  }\n");
+//
+//        MethodSpec handler = MethodSpec.methodBuilder("handle")
+//                .addModifiers(Modifier.PUBLIC, Modifier.STATIC)
+//                .returns(void.class)
+//                .addParameter(String.class, "msgId")
+//                .addParameter(byte[].class, "bytes")
+//                .addCode(sb.toString())
+//                .build();
+//
+//
+//        classBuilder
+//                .addMethod(handler);
+//
+//        JavaFile javaFile = JavaFile.builder("io.buck.autoswitch.compiler", classBuilder.build())
+//                .build();
+//        try {
+//            javaFile.writeTo(processingEnv.getFiler());
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("  switch(msgId){\n");
-            for (Handler handler : info.handlers) {
-                sb.append("    case \""  +handler.msgId + "\":\n");
-                sb.append("      " + "obj" + "." + handler.methodName + "();" + "\n");
-                sb.append("      " + "break;" + "\n");
+
+        StringBuilder builder = new StringBuilder();
+        builder.append("package io.buck.autoswitch.compiler;\n");
+        //import
+        for (String s : classMap.keySet()) {
+            builder.append("import " + s + ";\n");
+        }
+        builder.append("\n\n");
+
+        builder.append("public class AutoHandler {\n\n");
+        builder.append("    public static void handle(String msg, byte[] bytes) {\n");
+        builder.append("        switch(msg) {\n");
+        for (AnnotatedInfo annotatedInfo : classMap.values()) {
+            builder.append("\n");
+            for (Handler handler1 : annotatedInfo.handlers) {
+                builder.append("            case \"" + handler1.msgId + "\":\n");
+                builder.append("                " + annotatedInfo.className + "." + handler1.methodName + "(bytes);\n");
+                builder.append("                break;\n");
             }
-            sb.append("  }\n");
+            builder.append("\n");
+        }
+        builder.append("        }\n");
+        builder.append("    }\n");
+        builder.append("}\n");
 
 
-            MethodSpec handler = MethodSpec.methodBuilder("handler")
-                    .addModifiers(Modifier.PUBLIC)
-                    .returns(void.class)
-                    .addParameter(className, "obj")
-                    .addParameter(String.class, "msgId")
-                    .addCode(sb.toString())
-                    .build();
-            TypeSpec autoSwitch = TypeSpec.classBuilder("MyAutoSwitch")
-                    .addModifiers(Modifier.PUBLIC)
-                    .addMethod(handler)
-                    .build();
 
-            JavaFile javaFile = JavaFile.builder("io.buck.autoswitch.compiler", autoSwitch)
-                    .build();
-
-            try {
-                javaFile.writeTo(processingEnv.getFiler());
-            } catch (IOException e) {
-//                e.printStackTrace();
-                messager.printMessage(Diagnostic.Kind.NOTE,"ss");
-            }
+        Writer writer = null;
+        try {
+            JavaFileObject autoHandler = processingEnv.getFiler().createSourceFile("AutoHandler");
+            writer = autoHandler.openWriter();
+            writer.write(builder.toString());
+            writer.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-
+        if (writer != null) {
+            try {
+                writer.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
         return false;
     }
 
@@ -143,6 +196,10 @@ public class AutoSwitchProcessor extends AbstractProcessor {
             error(annotatedElement, "%s must be declared on method.", clazz.getSimpleName());
             return false;
         }
+//        if (!annotatedElement.getModifiers().contains(Modifier.STATIC)) {
+//            error(annotatedElement, "method must be static");
+//            return false;
+//        }
         if (ClassValidator.isPrivate(annotatedElement)) {
             error(annotatedElement, "%s() must can not be private.", annotatedElement.getSimpleName());
             return false;
@@ -155,6 +212,6 @@ public class AutoSwitchProcessor extends AbstractProcessor {
         if (args.length > 0) {
             message = String.format(message, args);
         }
-        processingEnv.getMessager().printMessage(Diagnostic.Kind.NOTE, message, element);
+        processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, message, element);
     }
 }

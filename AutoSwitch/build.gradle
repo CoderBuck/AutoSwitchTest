@@ -8,3 +8,9 @@ dependencies {
 
 sourceCompatibility = "1.7"
 targetCompatibility = "1.7"
+
+
+//用UTF-8格式编码源文件，否则注解处理器中中文会报错
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+}
